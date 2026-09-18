@@ -1,0 +1,60 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ master ]
+    paths-ignore:
+      - '*.md'
+      - '*.json'
+      - '**/wcokey.txt'
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: 'Build Flavor'
+        required: true
+        default: 'prerelease'
+        type: choice
+        options:
+          - prerelease
+          - stable
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "build-apk"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: 17
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v5
+
+    - name: Build APK
+      run: |
+        FLAVOR="${{ inputs.flavor || 'prerelease' }}"
+        if [ "$FLAVOR" = "stable" ]; then
+          ./gradlew assembleStableDebug
+        else
+          ./gradlew assemblePrereleaseDebug
+        fi
+
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: cloudstream-${{ inputs.flavor || 'prerelease' }}-apk
+        path: "app/build/outputs/apk/**/debug/*.apk"
+        if-no-files-found: error
