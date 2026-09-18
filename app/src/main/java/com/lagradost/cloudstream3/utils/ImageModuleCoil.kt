@@ -38,14 +38,25 @@ object ImageLoader {
     private const val TAG = "CoilImgLoader"
     internal fun buildImageLoader(context: PlatformContext): ImageLoader {
         val isBrokenHardware = hasPotentialBrokenHardware()
+        val activityManager = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        val isLowRam = activityManager?.isLowRamDevice == true || (activityManager?.memoryClass ?: 256) <= 192
+
+        val memoryCachePercent = if (isLowRam) 0.15 else 0.20
+        val defaultBitmapConfig = if (isLowRam || isBrokenHardware) {
+            Bitmap.Config.RGB_565
+        } else {
+            Bitmap.Config.ARGB_8888
+        }
+
         return ImageLoader.Builder(context)
             .crossfade(200)
-            .allowHardware(SDK_INT >= 28 && !isBrokenHardware)
+            .allowHardware(SDK_INT >= 28 && !isBrokenHardware && !isLowRam)
             .diskCachePolicy(CachePolicy.ENABLED)
             .networkCachePolicy(CachePolicy.ENABLED)
             .memoryCache {
-                MemoryCache.Builder().maxSizePercent(context, 0.1)//10 % of heap for mem-cache
-                    .strongReferencesEnabled(false)
+                MemoryCache.Builder()
+                    .maxSizePercent(context, memoryCachePercent)
+                    .strongReferencesEnabled(true)
                     .build()
             }
             .diskCache {
@@ -59,14 +70,12 @@ object ImageLoader {
             or image hosting services causes unauthorized exceptions **/
             .components {
                 add(OkHttpNetworkFetcherFactory(callFactory = { buildDefaultClient(context) }))
-                if (isBrokenHardware) {
+                if (isBrokenHardware || isLowRam) {
                     add(BitmapFactoryDecoder.Factory())
                 } // sw decoder
             }
             .apply {
-                if (isBrokenHardware) { // coil will auto choose optimal config on modern device
-                    bitmapConfig(Bitmap.Config.ARGB_8888)
-                }
+                bitmapConfig(defaultBitmapConfig)
                 setupCoilLogger()
             }
             .build()
@@ -120,10 +129,14 @@ object ImageLoader {
         val board = Build.BOARD?.lowercase() ?: ""
         val model = Build.MODEL?.lowercase() ?: ""
         val manufacturer = Build.MANUFACTURER?.lowercase() ?: ""
-        val allwinnerPatterns = listOf("sun50iw9", "h713", "allwinner", "sunxi")
+        val problematicPatterns = listOf(
+            "sun50iw9", "h713", "allwinner", "sunxi",
+            "amlogic", "meson", "rockchip", "rk30", "rk31", "rk32", "rk33", "rk35",
+            "realtek", "rtd", "mstar"
+        )
         val problematicModels =
-            listOf("hy320", "hy300", "a10plus", "magcubic", "sinoy", "android tv box")
-        return allwinnerPatterns.any { it in hardware || it in board || it in manufacturer } ||
+            listOf("hy320", "hy300", "a10plus", "magcubic", "sinoy", "android tv box", "aft", "firestick", "fire tv")
+        return problematicPatterns.any { it in hardware || it in board || it in manufacturer } ||
                 problematicModels.any { it in model }
     }
 

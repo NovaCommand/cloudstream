@@ -1,5 +1,6 @@
 package com.lagradost.cloudstream4.compose
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -52,11 +53,16 @@ fun Modifier.focusOutline(shape: Shape = RoundedShape()): Modifier {
 @Composable
 fun Modifier.whiteOutline(hasFocus: Boolean, shape: Shape = RoundedShape()): Modifier {
     return if (hasFocus) {
-        this.border(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.onBackground,
-            shape = shape
-        )
+        this
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                shape = shape
+            )
+            .border(
+                width = 2.dp,
+                color = MaterialTheme.colorScheme.onBackground,
+                shape = shape
+            )
     } else {
         this
     }

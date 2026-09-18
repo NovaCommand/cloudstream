@@ -3,6 +3,7 @@
 package com.lagradost.cloudstream3.ui.player
 
 import android.annotation.SuppressLint
+import android.app.ActivityManager
 import android.content.Context
 import android.content.DialogInterface
 import android.graphics.Bitmap
@@ -91,6 +92,7 @@ import com.lagradost.cloudstream3.ui.player.live.LiveHelper
 import com.lagradost.cloudstream3.ui.player.live.PREFERRED_LIVE_OFFSET
 import com.lagradost.cloudstream3.ui.settings.Globals.EMULATOR
 import com.lagradost.cloudstream3.ui.settings.Globals.PHONE
+import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.ui.subtitles.SaveCaptionStyle
 import com.lagradost.cloudstream3.ui.subtitles.SubtitlesFragment.Companion.applyStyle
@@ -1224,28 +1226,34 @@ class CS3IPlayer : IPlayer {
                 // Allows any seeking to be +- 0.3s to allow for faster seeking
                 .setSeekParameters(SeekParameters(toleranceBeforeUs, toleranceAfterUs))
                 .setLoadControl(
-                    DefaultLoadControl.Builder()
-                        .setTargetBufferBytes(
-                            if (cacheSize <= 0) {
-                                DefaultLoadControl.DEFAULT_TARGET_BUFFER_BYTES
-                            } else {
-                                if (cacheSize > Int.MAX_VALUE) Int.MAX_VALUE else cacheSize.toInt()
-                            }
-                        )
-                        .setBackBuffer(
-                            30000,
-                            true
-                        )
-                        .setBufferDurationsMs(
-                            DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
-                            if (videoBufferMs <= 0) {
-                                DefaultLoadControl.DEFAULT_MAX_BUFFER_MS
-                            } else {
-                                videoBufferMs.toInt()
-                            },
-                            DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
-                            DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
-                        ).build()
+                    run {
+                        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+                        val isLowRam = activityManager?.isLowRamDevice == true || (activityManager?.memoryClass ?: 256) <= 192 || isLayout(TV)
+                        val backBufferDurationMs = if (isLowRam) 10000 else 30000
+
+                        DefaultLoadControl.Builder()
+                            .setTargetBufferBytes(
+                                if (cacheSize <= 0) {
+                                    DefaultLoadControl.DEFAULT_TARGET_BUFFER_BYTES
+                                } else {
+                                    if (cacheSize > Int.MAX_VALUE) Int.MAX_VALUE else cacheSize.toInt()
+                                }
+                            )
+                            .setBackBuffer(
+                                backBufferDurationMs,
+                                true
+                            )
+                            .setBufferDurationsMs(
+                                DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
+                                if (videoBufferMs <= 0) {
+                                    DefaultLoadControl.DEFAULT_MAX_BUFFER_MS
+                                } else {
+                                    videoBufferMs.toInt()
+                                },
+                                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
+                                DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
+                            ).build()
+                    }
                 )
 
         // Because "Java rules" the media3 team hates to do open classes so we have to copy paste the entire thing to add a custom extractor

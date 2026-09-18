@@ -31,15 +31,43 @@ import com.lagradost.cloudstream3.utils.UIHelper.colorFromAttribute
 import com.lagradost.cloudstream3.utils.getImageFromDrawable
 
 object SearchResultBuilder {
-    private val showCache: MutableMap<String, Boolean> = mutableMapOf()
+    data class PosterUiConfig(
+        val showSub: Boolean = true,
+        val showDub: Boolean = true,
+        val showTitle: Boolean = true,
+        val showEpisodeText: Boolean = true,
+        val showHd: Boolean = true,
+        val showRating: Boolean = true,
+    )
+
+    private var posterConfig = PosterUiConfig()
+
+    class ViewHolder(itemView: View) {
+        val cardView: ImageView = itemView.findViewById(R.id.imageView)
+        val cardText: TextView? = itemView.findViewById(R.id.imageText)
+        val textIsDub: TextView? = itemView.findViewById(R.id.text_is_dub)
+        val textIsSub: TextView? = itemView.findViewById(R.id.text_is_sub)
+        val textFlag: TextView? = itemView.findViewById(R.id.text_flag)
+        val rating: TextView? = itemView.findViewById(R.id.text_rating)
+        val textQuality: TextView? = itemView.findViewById(R.id.text_quality)
+        val shadow: View? = itemView.findViewById(R.id.title_shadow)
+        val bg: CardView = itemView.findViewById(R.id.background_card)
+        val bar: ProgressBar? = itemView.findViewById(R.id.watchProgress)
+        val playImg: ImageView? = itemView.findViewById(R.id.search_item_download_play)
+        val episodeText: TextView? = itemView.findViewById(R.id.episode_text)
+    }
 
     fun updateCache(context: Context?) {
         if (context == null) return
         val settingsManager = PreferenceManager.getDefaultSharedPreferences(context)
-
-        for (k in context.resources.getStringArray(R.array.poster_ui_options_values)) {
-            showCache[k] = settingsManager.getBoolean(k, showCache[k] ?: true)
-        }
+        posterConfig = PosterUiConfig(
+            showSub = settingsManager.getBoolean(context.getString(R.string.show_sub_key), true),
+            showDub = settingsManager.getBoolean(context.getString(R.string.show_dub_key), true),
+            showTitle = settingsManager.getBoolean(context.getString(R.string.show_title_key), true),
+            showEpisodeText = settingsManager.getBoolean(context.getString(R.string.show_episode_text_key), true),
+            showHd = settingsManager.getBoolean(context.getString(R.string.show_hd_key), true),
+            showRating = settingsManager.getBoolean(context.getString(R.string.show_rating_key), true),
+        )
     }
 
     @SuppressLint("StringFormatInvalid")
@@ -52,22 +80,21 @@ object SearchResultBuilder {
         nextFocusDown: Int? = null,
         colorCallback: ((Palette) -> Unit)? = null
     ) {
-        val cardView: ImageView = itemView.findViewById(R.id.imageView)
-        val cardText: TextView? = itemView.findViewById(R.id.imageText)
+        val holder = (itemView.getTag(R.id.background_card) as? ViewHolder)
+            ?: ViewHolder(itemView).also { itemView.setTag(R.id.background_card, it) }
 
-        val textIsDub: TextView? = itemView.findViewById(R.id.text_is_dub)
-        val textIsSub: TextView? = itemView.findViewById(R.id.text_is_sub)
-        val textFlag: TextView? = itemView.findViewById(R.id.text_flag)
-        val rating: TextView? = itemView.findViewById(R.id.text_rating)
-
-        val textQuality: TextView? = itemView.findViewById(R.id.text_quality)
-        val shadow: View? = itemView.findViewById(R.id.title_shadow)
-
-        val bg: CardView = itemView.findViewById(R.id.background_card)
-
-        val bar: ProgressBar? = itemView.findViewById(R.id.watchProgress)
-        val playImg: ImageView? = itemView.findViewById(R.id.search_item_download_play)
-        val episodeText: TextView? = itemView.findViewById(R.id.episode_text)
+        val cardView = holder.cardView
+        val cardText = holder.cardText
+        val textIsDub = holder.textIsDub
+        val textIsSub = holder.textIsSub
+        val textFlag = holder.textFlag
+        val rating = holder.rating
+        val textQuality = holder.textQuality
+        val shadow = holder.shadow
+        val bg = holder.bg
+        val bar = holder.bar
+        val playImg = holder.playImg
+        val episodeText = holder.episodeText
 
         // Do logic
 
@@ -79,13 +106,13 @@ object SearchResultBuilder {
         rating?.isVisible = false
         episodeText?.isVisible = false
 
-        val showSub = showCache[textIsDub?.context?.getString(R.string.show_sub_key)] ?: false
-        val showDub = showCache[textIsDub?.context?.getString(R.string.show_dub_key)] ?: false
-        val showTitle = showCache[cardText?.context?.getString(R.string.show_title_key)] ?: false
-        val showEpisodeText = showCache[cardText?.context?.getString(R.string.show_episode_text_key)] ?: false
-        val showHd = showCache[textQuality?.context?.getString(R.string.show_hd_key)] ?: false
-        val showRatingView =
-            showCache[textQuality?.context?.getString(R.string.show_rating_key)] ?: false
+        val config = posterConfig
+        val showSub = config.showSub
+        val showDub = config.showDub
+        val showTitle = config.showTitle
+        val showEpisodeText = config.showEpisodeText
+        val showHd = config.showHd
+        val showRatingView = config.showRating
         if (card is SyncAPI.LibraryItem) {
             val ratingText = card.personalRating?.toStringNull(0.1, 10, 1)
             val showRating = !ratingText.isNullOrBlank()

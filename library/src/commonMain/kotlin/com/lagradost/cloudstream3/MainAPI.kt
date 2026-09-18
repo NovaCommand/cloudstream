@@ -2578,30 +2578,37 @@ constructor(
 fun Episode.addDate(date: String?, format: String = "yyyy-MM-dd") {
     if (date.isNullOrBlank()) return
     this.date = runCatching {
-        // First try standard ISO 8601 (e.g. "2026-01-01T12:30:00.000Z", "2026-05-17T14:35+02:00")
-        runCatching { Instant.parse(date).toEpochMilliseconds() }
-            .getOrElse {
-                val fmt = DateTimeComponents.Format { byUnicodePattern(format) }
+        val hasExplicitOffset = date.endsWith("Z", ignoreCase = true) || date.contains('+') || (date.length > 10 && date.substring(10).contains('-'))
+        val isoInstant = if (hasExplicitOffset) {
+            runCatching { Instant.parse(date).toEpochMilliseconds() }.getOrNull()
+        } else null
 
-                // Try parsing the full date first then only parse the beginning of the string
-                // May lose time, but better than failing.
-                val components = runCatching {
-                    DateTimeComponents.parse(date, fmt)
-                }.recoverCatching {
-                    DateTimeComponents.parse(date.trimStart().take(format.length), fmt)
-                }.getOrThrow()
+        isoInstant ?: run {
+            val fmt = DateTimeComponents.Format { byUnicodePattern(format) }
 
-                /**
-                 * Try multiple conversions in order of precision for non-ISO-8601 formats,
-                 * since the date string may or may not include time and/or timezone offset:
-                 * 1. If the custom format produced a UTC offset (e.g. "2026-05-17 14:35+02:00"), use it directly
-                 * 2. If it has time but no offset (e.g. "2026-05-17 14:35"), fall back to device timezone
-                 * 3. If it's date-only (e.g. "2026-05-17"), use start of day in device timezone
-                 */
-                runCatching { components.toInstantUsingOffset().toEpochMilliseconds() }
-                    .recoverCatching { components.toLocalDateTime().toInstant(TimeZone.currentSystemDefault()).toEpochMilliseconds() }
+            // Try parsing the full date first then only parse the beginning of the string
+            // May lose time, but better than failing.
+            val components = runCatching {
+                DateTimeComponents.parse(date, fmt)
+            }.recoverCatching {
+                DateTimeComponents.parse(date.trimStart().take(format.length), fmt)
+            }.getOrThrow()
+
+            /**
+             * Try multiple conversions in order of precision for non-ISO-8601 formats,
+             * since the date string may or may not include time and/or timezone offset:
+             * 1. If the custom format produced a UTC offset (e.g. "2026-05-17 14:35+02:00"), use it directly
+             * 2. If it has time but no offset (e.g. "2026-05-17 14:35"), fall back to device timezone
+             * 3. If it's date-only (e.g. "2026-05-17"), use start of day in device timezone
+             */
+            val hasOffset = components.offsetHours != null || components.offsetMinutesOfHour != null || components.offsetIsNegative != null
+            if (hasOffset) {
+                components.toInstantUsingOffset().toEpochMilliseconds()
+            } else {
+                runCatching { components.toLocalDateTime().toInstant(TimeZone.currentSystemDefault()).toEpochMilliseconds() }
                     .getOrElse { components.toLocalDate().atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds() }
             }
+        }
     }.onFailure { logError(it) }.getOrNull()
 }
 
@@ -2767,9 +2774,13 @@ fun isUpcoming(dateString: String?): Boolean {
          * 2. If it has time but no offset (e.g. "2026-05-17T14:35"), fall back to device timezone
          * 3. If it's date-only (e.g. "2026-05-17"), use start of day in device timezone
          */
-        val instant = runCatching { components.toInstantUsingOffset() }
-            .recoverCatching { components.toLocalDateTime().toInstant(TimeZone.currentSystemDefault()) }
-            .getOrElse { components.toLocalDate().atStartOfDayIn(TimeZone.currentSystemDefault()) }
+        val hasOffset = components.offsetHours != null || components.offsetMinutesOfHour != null || components.offsetIsNegative != null
+        val instant = if (hasOffset) {
+            components.toInstantUsingOffset()
+        } else {
+            runCatching { components.toLocalDateTime().toInstant(TimeZone.currentSystemDefault()) }
+                .getOrElse { components.toLocalDate().atStartOfDayIn(TimeZone.currentSystemDefault()) }
+        }
         Clock.System.now() < instant
     }.onFailure { logError(it) }.getOrElse { false }
 }

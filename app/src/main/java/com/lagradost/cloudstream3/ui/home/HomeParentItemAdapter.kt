@@ -98,6 +98,8 @@ open class ParentItemAdapter(
         binding.apply {
             val currentAdapter = homeChildRecyclerview.adapter as? HomeChildItemAdapter
             if (currentAdapter == null) {
+                homeChildRecyclerview.setHasFixedSize(true)
+                homeChildRecyclerview.itemAnimator = null
                 homeChildRecyclerview.setRecycledViewPool(HomeChildItemAdapter.sharedPool)
                 homeChildRecyclerview.adapter = HomeChildItemAdapter(
                     id = id + position + 100,
@@ -127,6 +129,7 @@ open class ParentItemAdapter(
             )
             homeChildMoreInfo.text = info.name
 
+            homeChildRecyclerview.clearOnScrollListeners()
             homeChildRecyclerview.addOnScrollListener(object :
                 RecyclerView.OnScrollListener() {
                 var expandCount = 0
